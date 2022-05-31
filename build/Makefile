@@ -6,23 +6,23 @@ export Emu=qemu-system-$(Arch)
 export Name=raw-boot
 
 export DirArch=../$(Arch)
-# export DirInclude=$(DirArch)/include
-# export DirSource=$(DirArch)/source
+export DirInclude=$(DirArch)/include
+export DirSource=$(DirArch)/source
 export DirBoot=$(DirArch)/boot
 
-# export SourcesCpp=$(shell find $(DirSource) -name '*.cpp')
-# export SourcesAsm=$(shell find $(DirSource) -name '*.asm')
-# export ObjectsCpp=$(SourcesCpp:.cpp=.cppo)
-# export ObjectsAsm=$(SourcesAsm:.asm=.asmo)
+export SourcesCpp=$(shell find $(DirSource) -name '*.cpp')
+export SourcesAsm=$(shell find $(DirSource) -name '*.asm')
+export ObjectsCpp=$(SourcesCpp:.cpp=.cppo)
+export ObjectsAsm=$(SourcesAsm:.asm=.asmo)
 
 export FlagsCompiler=-std=c++17 -ffreestanding -nostdlib -O2 -Wall -Wextra -fno-exceptions -fno-rtti -I $(DirInclude)
-export FlagsLinker=-m16 -ffreestanding -O2 -nostdlib -T $(DirArch)/link.ld -lgcc
+export FlagsLinker=-m32 -ffreestanding -O2 -nostdlib -T $(DirArch)/link.ld -lgcc
 export FlagsEmu=-drive format=raw,file=$(Name).bin -m 2G -monitor stdio
 
 all:
-	# $(MAKE) $(ObjectsCpp)
-	# $(MAKE) $(ObjectsAsm)
-	# $(MAKE) kernel
+	$(MAKE) $(ObjectsCpp)
+	$(MAKE) $(ObjectsAsm)
+	$(MAKE) kernel
 	$(MAKE) boot
 
 boot:
