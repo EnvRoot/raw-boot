@@ -133,3 +133,7 @@ dw 0xaa55
 stage2_start:
 incbin "loader.bin"
 stage2_end:
+
+kernel_start:
+incbin "kernel.bin"
+kernel_end:

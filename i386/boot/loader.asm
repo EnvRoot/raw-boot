@@ -1,26 +1,45 @@
 bits 16
 org 0x600
 
-%define __length__		((__end__-__start__+0x1ff) & ~0x1ff) / 512
+%define __lba__						1
+%define __length__				(((__end__-__start__+0x1ff) & ~0x1ff) / 512)
+
+%define __kernel_lba__		(__lba__ + __length__)
 
 __start__:
-mov ax, 0x0013
-int 0x10
+mov byte [drive], dl
 call cpu_enter_unreal
-mov di, __end__
-call get_memory_map_alt
-xor eax, eax
-mov ax, di
+
+mov dword [transfer_packet_lba], __kernel_lba__
+mov dword [transfer_packet_length], 1
+mov byte [transfer_packet_drive], dl
+mov word [transfer_packet_buffer512], __end__
+mov dword [transfer_packet_location], __end__+0x200
+call read_chs
+
+mov eax, [__end__+12]
+sub eax, [__end__+8]
 mov ebx, 0x200
 call round_up
+xor edx, edx
+div ebx
+mov ebx, [__end__+16]
+mov dword [kernel_address], ebx
+mov ebx, [__end__+8]
 
-mov dword [transfer_packet_lba], 1
-mov dword [transfer_packet_length], 2
+mov dl, [drive]
+mov dword [transfer_packet_lba], __kernel_lba__
+mov dword [transfer_packet_length], eax
 mov byte [transfer_packet_drive], dl
-mov dword [transfer_packet_location], 0x2000
-mov word [transfer_packet_buffer512], 0x1e00
+mov word [transfer_packet_buffer512], __end__
+mov dword [transfer_packet_location], ebx
 call read_chs
-jmp $
+
+mov edi, __end__
+call get_memory_map_alt
+
+mov eax, jmp_to_kernel
+call cpu_enter_protected
 
 cpu_enter_unreal:
 	cli
@@ -147,7 +166,7 @@ convert_lba_to_chs:
 	mov es, di
 	mov ah, 8
 	int 0x13					; DH = number of heads - 1, CL & 0x3f - SPT
-	add dh, 1
+	inc dh
 	and cl, 0x3f
 	mov byte [convert_lba_to_chs_heads], dh
 	mov byte [convert_lba_to_chs_sectors], cl
@@ -156,11 +175,11 @@ convert_lba_to_chs:
 	mov edx, 0
 	mov bl, [convert_lba_to_chs_sectors]
 	div ebx
-	add edx, 1
+	inc edx
 	mov byte [convert_lba_to_chs_sector], dl	; sector
 	xor ebx, ebx ; Get head and cylinder
 	xor edx, edx
-	mov bl, convert_lba_to_chs_heads
+	mov bl, [convert_lba_to_chs_heads]
 	div ebx
 	xor ebx, ebx
 	and eax, 0x3ff
@@ -229,7 +248,7 @@ read_chs:
 		cmp dh, 0xff
 		jl read_chs_cycle_dh
 		inc ch
-		and cl, 11000000b
+		and cl, 0xc0
 	read_chs_cycle_dh:
 		inc dh
 	read_chs_cycle_cl:
@@ -245,12 +264,27 @@ read_chs:
 		mov ah, 0
 		ret
 
+cpu_enter_protected:
+	mov dword [cpu_enter_protected_address], eax
+	cli
+	lgdt [gdt_protected_ptr]
+	mov eax, cr0
+	or al, 1
+	mov cr0, eax
+	jmp gdt_protected_code-gdt_protected_null:cpu_enter_protected_done
+	cpu_enter_protected_done:
+	[bits 32]
+	mov eax, [cpu_enter_protected_address]
+	jmp eax
+	[bits 16]
+	cpu_enter_protected_address:	dd	0
+
 gdt_unreal:
 	gdt_unreal_ptr:
 		dw gdt_unreal_end - gdt_unreal_null - 1
 		dd gdt_unreal_null
 	gdt_unreal_null:	dq 0
-	gdt_unreal_data:	db 0xff, 0xff, 0, 0, 0, 10010010b, 11001111b, 0
+	gdt_unreal_data:	dq 0xcf92000000ffff
 	gdt_unreal_end:
 
 transfer_packet:
@@ -260,4 +294,26 @@ transfer_packet:
 	transfer_packet_location:		dd 0
 	transfer_packet_buffer512:	dw 0
 
+gdt_protected:
+	gdt_protected_ptr:
+		dw gdt_protected_end - gdt_protected_null - 1
+		dd gdt_protected_null
+	gdt_protected_null:	dq 0
+	gdt_protected_code:	dq 0xcf9a000000ffff
+	gdt_protected_data:	dq 0xcf92000000ffff
+	gdt_protected_end:
+
+[bits 32]
+jmp_to_kernel:
+	mov ax, 0x10
+	mov ds, ax
+	mov es, ax
+	mov fs, ax
+	mov gs, ax
+	mov ss, ax
+	jmp dword [kernel_address]
+
+kernel_address:		dd 0
+drive:						db 0
+times 0x400-$+$$	db 0
 __end__:

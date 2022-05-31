@@ -2,13 +2,15 @@ ENTRY(entry)
 OUTPUT_FORMAT(binary)
 OUTPUT_ARCH(i386)
 SECTIONS {
-	. = 0x600;
+	. = 0x2000;
 	__external_start = .;
 
 	.head :
 	{
-		LONG(entry)
-		LONG(__external_end - __external_start)
+		QUAD(0x36384E4942545845)		/*EXTBIN86*/
+		LONG(__external_start)		/*SOF*/
+		LONG(__external_end)			/*EOF*/
+		LONG(entry)								/*EP*/
 	}
 
 	.text :
